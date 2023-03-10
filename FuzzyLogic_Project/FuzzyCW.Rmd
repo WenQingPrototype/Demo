@@ -1,0 +1,336 @@
+---
+title: "FuzzyCW"
+author: "WenQing Chai"
+date: "2022/4/2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r Install package}
+## install the packages 
+#install.packages("FuzzyR")
+library(FuzzyR)
+library(shiny)
+```
+
+```{r sigmoidmf}
+sigmoidmf <- function(mf.params) {
+
+    if (length(mf.params) != 2 && length(mf.params) != 3) {
+        stop("improper parameters for generalised bell membership function")
+    }
+
+    a <- mf.params[1]
+    c <- mf.params[2]
+
+    if (length(mf.params) == 3) {
+        h <- mf.params[3]
+    } else {
+        h <- 1
+    }
+
+    sigmoidmf <- function(x) {
+        h / (1 + exp(-a * (x - c)))
+    }
+
+}
+```
+
+```{r Preparation}
+##specify the inputData and ideal outputData
+inputData <- rbind(
+c(35.5,1),
+c(35.8,3),
+c(36.0,3),
+c(36.5,8),
+c(36.7,1),
+c(36.7,3),
+c(36.9,6),
+c(36.8,8),
+c(37.3,1),
+c(37.8,3),
+c(38.3,1),
+c(38.2,6),
+c(40.1,1),
+c(40.2,5),
+c(40.6,10))
+
+outputData <- c(
+30,45,30,60,10,20,30,70,10,30,50,70,80,90,100
+)
+```
+
+
+```{r FIS5}
+## FIS5
+
+fis5 <- newfis('fis5')
+fis5 <- addvar(fis5, 'input', 'Temperature', c(35, 41))
+fis5 <- addvar(fis5, 'input', 'Headache', c(0,10))
+fis5 <- addvar(fis5, 'output', 'Urgency', c(0, 100))
+
+fis5 <- addmf(fis5, 'input', 1, 'Hypothermia', 'gaussmf', c(1, 35)) 
+fis5 <- addmf(fis5, 'input', 1, 'Normal',      'gaussmf', c(1, 37))
+fis5 <- addmf(fis5, 'input', 1, 'Mild Fever',  'gaussmf', c(1, 37.8))
+fis5 <- addmf(fis5, 'input', 1, 'Severe Fever','gaussmf', c(1, 38.3)) 
+fis5 <- addmf(fis5, 'input', 1, 'Hyperpyrexia','gaussmf', c(1, 41))
+
+fis5 <- addmf(fis5, 'input', 2, 'No pain',      'trimf', c(0, 0, 2.5))
+fis5 <- addmf(fis5, 'input', 2, 'Mild',         'trimf', c(0, 2.5, 5))
+fis5 <- addmf(fis5, 'input', 2, 'Moderate',     'trimf', c(2.5, 5,7.5))
+fis5 <- addmf(fis5, 'input', 2, 'Severe',       'trimf', c(5, 7.5, 10))
+fis5 <- addmf(fis5, 'input', 2, 'Excruciating', 'trimf', c(7.5, 10, 10))
+
+fis5 <- addmf(fis5, 'output', 1, 'No need',   'gaussmf', c(10, 0)) 
+fis5 <- addmf(fis5, 'output', 1, 'Mild',      'gaussmf', c(10, 20)) 
+fis5 <- addmf(fis5, 'output', 1, 'Medium',    'gaussmf', c(10, 50))
+fis5 <- addmf(fis5, 'output', 1, 'High',      'gaussmf', c(5, 80)) 
+fis5 <- addmf(fis5, 'output', 1, 'Emergency', 'gaussmf', c(5, 100)) 
+
+#rl  <- rbind(c(4,2,3,1,1), c(5,4,5,1,1))
+rl = rbind(c(1,1,1,1,1),
+         c(1,2,2,1,1),c(1,3,3,1,1),c(1,4,4,1,1),c(2,1,1,1,1),
+          c(2,2,1,1,1),c(2,3,2,1,1),c(2,4,3,1,1),c(3,1,2,1,1),
+          c(3,2,3,1,1),c(3,3,3,1,1),c(3,4,4,1,1),c(4,1,3,1,1),
+          c(4,2,3,1,1),c(4,3,4,1,1),c(4,4,5,1,1),c(5,5,5,1,2))
+
+fis5 <- addrule(fis5, rl)
+
+showGUI(fis5)
+
+##Show the surface plot for this FIS
+gensurf(fis5)
+
+## caculate running time
+StartTime=proc.time()
+outputs5 <- evalfis(inputData, fis5)
+EndTime=proc.time()
+t=EndTime-StartTime
+print(paste('The execution time for this FIA is:',t[3][[1]],'seconds'))
+
+##evaluate the valute of the RMSE method for this FIS
+RMSEValue = sqrt(sum((outputs5-outputData)^2)/length(outputData))
+print(paste("RMSE result for this FIS is :",RMSEValue,"."))
+
+print("The differences between output fuzzyset and ideal output fuzzyset is")
+(outputs5-outputData)
+
+print("outputs5")
+outputs5
+print("outputData")
+outputData
+```
+
+```{r FIS1 MAM}
+fis1 <- newfis('fis1',impMethod = "prod")
+fis1 <- addvar(fis1, 'input', 'Temperature', c(35, 41))
+fis1 <- addvar(fis1, 'input', 'Headache', c(0,10))
+fis1 <- addvar(fis1, 'output', 'Urgency', c(0, 100))
+
+fis1 <- addmf(fis1, 'input', 1, 'Hypothermia', 'gbellmf', c(1.5,2, 35)) 
+fis1 <- addmf(fis1, 'input', 1, 'Normal',      'trapmf', c(35,36.5,37.5,41))
+fis1 <- addmf(fis1, 'input', 1, 'Fever',       'gbellmf', c(1.5,2,41))
+
+
+
+fis1 <- addmf(fis1, 'input', 2, 'Mild',        'gbellmf', c(3,3, 0))
+fis1 <- addmf(fis1, 'input', 2, 'Moderate',    'trapmf', c(0,4,7,10))
+fis1 <- addmf(fis1, 'input', 2, 'Severe',      'gbellmf', c(3,3,10))
+
+
+ 
+fis1 <- addmf(fis1, 'output', 1, 'Mild',      'gbellmf', c(30,30, 0)) 
+fis1 <- addmf(fis1, 'output', 1, 'Medium',    'trapmf', c(0,40,70,100))
+fis1 <- addmf(fis1, 'output', 1, 'High',      'gbellmf', c(30,30, 100))
+ 
+
+rl  <- rbind(c(2,2,2,1,1), c(3,3,3,1,1),c(1,1,1,1,1))
+
+
+fis1 <- addrule(fis1, rl)
+
+#showGUI(fis1)
+
+##Show the surface plot for this FIS
+gensurf(fis1)
+
+## caculate running time
+StartTime=proc.time()
+outputs1 <- evalfis(inputData, fis1)
+EndTime=proc.time()
+t=EndTime-StartTime
+print(paste('The execution time for this FIS is:',t[3][[1]],'seconds'))
+
+##evaluate the valute of the RMSE method for this FIS
+RMSEValue = sqrt(sum((outputs1-outputData)^2)/length(outputData))
+print(paste("RMSE result for this FIS is :",RMSEValue,"."))
+
+print("The differences between output fuzzyset and ideal output fuzzyset is")
+(outputs1-outputData)
+
+```
+
+```{r FIS2 TSK Zeroth order}
+## FIS2
+
+fis2 <- newfis('fis2',fisType = "tsk",andMethod = "prod")
+fis2 <- addvar(fis2, 'input', 'Temperature', c(35, 41),fuzzification.method <-"singleton.fuzzification")
+fis2 <- addvar(fis2, 'input', 'Headache', c(0,10),fuzzification.method <- "singleton.fuzzification")
+fis2 <- addvar(fis2, 'output', 'Urgency', c(0, 100))
+
+fis2 <- addmf(fis2, 'input', 1, 'Hypothermia', 'trapmf', c(35,35,36,36.5)) 
+fis2 <- addmf(fis2, 'input', 1, 'Normal',      'trapmf', c(35,36.5,37.5,41))
+fis2 <- addmf(fis2, 'input', 1, 'Fever',       'trapmf', c(36.5,37.5,41,41))
+
+fis2 <- addmf(fis2, 'input', 2, 'Mild',        'trapmf', c(0,0,3.5,5))
+fis2 <- addmf(fis2, 'input', 2, 'Moderate',    'trapmf', c(0,4,7,10))
+fis2 <- addmf(fis2, 'input', 2, 'Severe',      'trapmf', c(5,8,10,10))
+
+
+ 
+fis2 <- addmf(fis2, 'output', 1, 'Mild',      "linearmf", c(0, 0, 0)) 
+fis2 <- addmf(fis2, 'output', 1, 'Medium',    "linearmf", c(50, 0, 0))
+fis2 <- addmf(fis2, 'output', 1, 'High',      "linearmf", c(100, 0, 0))
+
+rl  <- rbind(c(2,2,2,1,1), c(3,3,3,1,1),c(1,1,1,1,1))
+
+
+fis2 <- addrule(fis2, rl)
+
+#showGUI(fis2)
+
+##Show the surface plot for this FIS
+gensurf(fis2)
+
+## caculate running time
+StartTime=proc.time()
+outputs2 <- evalfis(inputData, fis2)
+EndTime=proc.time()
+t=EndTime-StartTime
+print(paste('The execution time for this FIS is:',t[3][[1]],'seconds'))
+
+##evaluate the valute of the RMSE method for this FIS
+RMSEValue = sqrt(sum((outputs2-outputData)^2)/length(outputData))
+print(paste("RMSE result for this FIS is :",RMSEValue,"."))
+
+print("The differences between output fuzzyset and ideal output fuzzyset is")
+(outputs2-outputData)
+
+```
+
+```{r FIS3 TSK First order}
+fis3 <- newfis('fis3',fisType = "tsk")
+fis3 <- addvar(fis3, 'input', 'Temperature', c(35, 41),fuzzification.method <-"singleton.fuzzification")
+fis3 <- addvar(fis3, 'input', 'Headache', c(0,10),fuzzification.method <- "singleton.fuzzification")
+fis3 <- addvar(fis3, 'output', 'Urgency', c(0, 100))
+
+fis3 <- addmf(fis3, 'input', 1, 'Hypothermia', 'trimf', c(0,35,36.5))
+fis3 <- addmf(fis3, 'input', 1, 'Normal',      'trapmf', c(35,36.5,37.5,41))
+fis3 <- addmf(fis3, 'input', 1, 'Fever',       'sigmoidmf', c(3,38))
+
+fis3 <- addmf(fis3, 'input', 2, 'Mild',        'trimf', c(0,0,4))
+fis3 <- addmf(fis3, 'input', 2, 'Moderate',    'trapmf', c(0,4,7,10))
+fis3 <- addmf(fis3, 'input', 2, 'Severe',      'sigmoidmf', c(3,8))
+
+
+ 
+fis3 <- addmf(fis3, 'output', 1, 'Mild',      "linearmf", c(0, 1, 0.1)) 
+fis3 <- addmf(fis3, 'output', 1, 'Medium',    "linearmf", c(30, 0.4, 0.4))
+fis3 <- addmf(fis3, 'output', 1, 'High',      "linearmf", c(80, 0.3, 0.1))
+
+rl  <- rbind(c(2,2,2,1,1), c(3,3,3,1,1),c(1,1,1,1,1))
+
+
+fis3 <- addrule(fis3, rl)
+
+#showGUI(fis3)
+
+##Show the surface plot for this FIS
+gensurf(fis3)
+
+## caculate running time
+StartTime=proc.time()
+outputs3 <- evalfis(inputData, fis3)
+EndTime=proc.time()
+t=EndTime-StartTime
+print(paste('The execution time for this FIS is:',t[3][[1]],'seconds'))
+
+##evaluate the valute of the RMSE method for this FIS
+RMSEValue = sqrt(sum((outputs3-outputData)^2)/length(outputData))
+print(paste("RMSE result for this FIS is :",RMSEValue,"."))
+
+print("The differences between output fuzzyset and ideal output fuzzyset is")
+(outputs3-outputData)
+```
+
+```{r FIS4 TSK}
+## FIS4
+
+fis4 <- newfis('fis4',fisType = "tsk",andMethod = "prod")
+fis4 <- addvar(fis4, 'input', 'Temperature', c(35, 41),fuzzification.method <-"singleton.fuzzification")
+fis4 <- addvar(fis4, 'input', 'Headache', c(0,10),fuzzification.method <-"singleton.fuzzification")
+fis4 <- addvar(fis4, 'output', 'Urgency', c(0, 100))
+
+fis4 <- addmf(fis4, 'input', 1, 'Hypothermia', 'gaussmf', c(1, 35)) 
+fis4 <- addmf(fis4, 'input', 1, 'Normal',      'gaussmf', c(1, 37))
+fis4 <- addmf(fis4, 'input', 1, 'Mild Fever',  'gaussmf', c(1, 37.8))
+fis4 <- addmf(fis4, 'input', 1, 'Severe Fever','gaussmf', c(1, 38.3)) 
+fis4 <- addmf(fis4, 'input', 1, 'Hyperpyrexia','gaussmf', c(1, 41))
+
+fis4 <- addmf(fis4, 'input', 2, 'No pain',      'gaussmf', c(1, 0))
+fis4 <- addmf(fis4, 'input', 2, 'Mild',         'gaussmf', c(1, 2.5))
+fis4 <- addmf(fis4, 'input', 2, 'Moderate',     'gaussmf', c(1, 5))
+fis4 <- addmf(fis4, 'input', 2, 'Severe',       'gaussmf', c(1, 7.5))
+fis4 <- addmf(fis4, 'input', 2, 'excruciating', 'gaussmf', c(1, 10))
+
+fis4 <- addmf(fis4, 'output', 1, 'No need',   "linearmf", c(0, 1, 0.1)) 
+fis4 <- addmf(fis4, 'output', 1, 'Mild',      "linearmf", c(10, 0.05, 5)) 
+fis4 <- addmf(fis4, 'output', 1, 'Medium',    "linearmf", c(30, 0.4, 0.3))
+fis4 <- addmf(fis4, 'output', 1, 'High',      "linearmf", c(80, 0.3, 0.1)) 
+fis4 <- addmf(fis4, 'output', 1, 'Emergency', "linearmf", c(90, 0.3, 0.1)) 
+
+#rl  <- rbind(c(4,2,3,1,1), c(5,4,5,1,1))
+rl = rbind(c(1,1,1,1,1),c(1,2,2,1,1),c(1,3,2,1,1),c(1,4,3,1,1),
+           c(2,1,1,1,1),c(2,2,2,1,1),c(2,3,2,1,1),c(2,4,3,2,1),
+           c(3,1,2,1,1),c(3,2,2,1,1),c(3,3,3,1,1),c(3,4,3,1,1),
+           c(4,1,3,1,1),c(4,2,3,1,1),c(4,3,4,1,1),c(4,4,5,1,1),
+           c(5,5,5,1,2))
+
+
+
+
+
+
+fis4 <- addrule(fis4, rl)
+
+showGUI(fis4)
+
+##Show the surface plot for this FIS
+gensurf(fis4)
+
+## caculate running time
+StartTime=proc.time()
+outputs4 <- evalfis(inputData, fis4)
+EndTime=proc.time()
+t=EndTime-StartTime
+print(paste('The execution time for this FIS is:',t[3][[1]],'seconds'))
+
+##evaluate the valute of the RMSE method for this FIS
+RMSEValue = sqrt(sum((outputs4-outputData)^2)/length(outputData))
+print(paste("RMSE result for this FIS is :",RMSEValue,"."))
+
+print("The differences between output fuzzyset and ideal output fuzzyset is")
+(outputs4-outputData)
+print("outputs4")
+outputs4
+print("outputData")
+outputData
+```
+
+```
+
